@@ -85,6 +85,16 @@ const T = {
   loginError:    { en: "Invalid email or password",       bn: "ভুল ইমেইল বা পাসওয়ার্ড" },
   loggingIn:     { en: "Signing in…",                     bn: "সাইন ইন হচ্ছে…" },
   logout:        { en: "Logout",                          bn: "লগআউট" },
+  registerTitle: { en: "CHW Registration",                bn: "সিএইচডব্লিউ নিবন্ধন" },
+  name:          { en: "Name",                            bn: "নাম" },
+  regNamePh:     { en: "Your full name",                  bn: "আপনার পুরো নাম" },
+  clinicLocation: { en: "Clinic Location",                bn: "ক্লিনিকের অবস্থান" },
+  clinicPh:      { en: "e.g. Sylhet Rural Health Centre", bn: "যেমন সিলেট গ্রামীণ স্বাস্থ্য কেন্দ্র" },
+  registerBtn:   { en: "Create Account",                  bn: "অ্যাকাউন্ট তৈরি করুন" },
+  haveAccount:   { en: "Already have an account?",        bn: "ইতিমধ্যে অ্যাকাউন্ট আছে?" },
+  signIn:        { en: "Sign In",                         bn: "সাইন ইন" },
+  noAccount:     { en: "Don't have an account?",          bn: "অ্যাকাউন্ট নেই?" },
+  createOne:     { en: "Create one",                      bn: "তৈরি করুন" },
 };
 
 export const tx = (key: keyof typeof T, lang: Lang): string => {

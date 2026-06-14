@@ -7,6 +7,7 @@ import { OfflineBanner } from "@/app/components/shared/OfflineBanner";
 import { StepProgressBar } from "@/app/components/shared/StepProgressBar";
 import { ConfirmModal } from "@/app/components/shared/ConfirmModal";
 import { Login } from "@/app/screens/Login";
+import { Register } from "@/app/screens/Register";
 import { Dashboard } from "@/app/screens/Dashboard";
 import { Step1PatientInfo } from "@/app/screens/Step1PatientInfo";
 import { Step2Documents } from "@/app/screens/Step2Documents";
@@ -150,7 +151,20 @@ export default function App() {
             transition={{ duration: 0.18, ease: "easeOut" }}
             className="flex-1 flex flex-col min-h-0 overflow-hidden"
           >
-            {screen === "login" && <Login lang={lang} onLogin={handleLogin} />}
+            {screen === "login" && (
+              <Login
+                lang={lang}
+                onLogin={handleLogin}
+                onRegister={() => goTo("register")}
+              />
+            )}
+            {screen === "register" && (
+              <Register
+                lang={lang}
+                onRegister={() => goTo("login")}
+                onBackToLogin={() => goTo("login")}
+              />
+            )}
             {screen === "dashboard" && (
               <div className="flex-1 overflow-y-auto">
                 <Dashboard onStart={handleStartTriage} lang={lang} />
