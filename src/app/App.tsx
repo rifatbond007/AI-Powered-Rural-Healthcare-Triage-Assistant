@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import type { Lang, Screen, PatientData, Vitals } from "@/app/types";
+import type { Lang, Screen, PatientData, Vitals, TriageConfig } from "@/app/types";
 import { tx } from "@/app/translations";
 import { AppHeader } from "@/app/components/shared/AppHeader";
 import { OfflineBanner } from "@/app/components/shared/OfflineBanner";
 import { StepProgressBar } from "@/app/components/shared/StepProgressBar";
 import { ConfirmModal } from "@/app/components/shared/ConfirmModal";
+import { Login } from "@/app/screens/Login";
 import { Dashboard } from "@/app/screens/Dashboard";
 import { Step1PatientInfo } from "@/app/screens/Step1PatientInfo";
 import { Step2Documents } from "@/app/screens/Step2Documents";
@@ -13,18 +14,45 @@ import { Step3Vitals } from "@/app/screens/Step3Vitals";
 import { Step4Loading } from "@/app/screens/Step4Loading";
 import { Step4TriageResult } from "@/app/screens/Step4TriageResult";
 import { Step5Report } from "@/app/screens/Step5Report";
+import type { TriageResponse, AnomalyItem } from "@/app/api";
+import { createPatient, analyzeVitals, analyzeTriage, speakReport } from "@/app/api";
 
 const SCREEN_STEP: Partial<Record<Screen, number>> = {
   step1: 1, step2: 2, step3: 3, step4_loading: 4, step4: 4, step5: 5,
 };
 
+function mapTriageResponse(r: TriageResponse): TriageConfig {
+  const levelMap: Record<string, "critical" | "urgent" | "moderate" | "minor"> = {
+    GREEN: "minor", YELLOW: "moderate", RED: "urgent", BLACK: "critical",
+  };
+  return {
+    level: levelMap[r.triageLevel] ?? "moderate",
+    score: r.triageScore,
+    reasoning: r.reasoning,
+    reasoningbn: r.reasoning,
+    conditions: r.differentialDiagnoses.map((c) => ({
+      en: c.name, bn: c.name, probability: c.probability,
+    })),
+    firstAid: r.firstAidSteps.map((s) => ({ en: s.step, bn: s.step })),
+    referral: {
+      en: r.referralNeeded ? (r.referralUrgency ?? "Immediate referral needed") : "No referral needed",
+      bn: r.referralNeeded ? (r.referralUrgency ?? "Immediate referral needed") : "No referral needed",
+    },
+  };
+}
+
 export default function App() {
   const [lang, setLang] = useState<Lang>("en");
-  const [screen, setScreen] = useState<Screen>("dashboard");
+  const [screen, setScreen] = useState<Screen>(
+    localStorage.getItem("token") ? "dashboard" : "login",
+  );
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showConfirm, setShowConfirm] = useState(false);
   const [patientData, setPatientData] = useState<PatientData>({ name: "", age: "", gender: "", transcription: "" });
   const [vitals, setVitals] = useState<Vitals>({ bp: "", hr: "", temp: "", spo2: "", glucose: "" });
+  const [triageResult, setTriageResult] = useState<TriageConfig | null>(null);
+  const [patientId, setPatientId] = useState<string | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const onOnline = () => setIsOnline(true);
@@ -37,18 +65,70 @@ export default function App() {
   const goTo = (s: Screen) => setScreen(s);
   const currentStep = SCREEN_STEP[screen] ?? null;
 
+  const handleLogin = () => setScreen("dashboard");
+
   const handleStartTriage = () => {
     setPatientData({ name: "", age: "", gender: "", transcription: "" });
     setVitals({ bp: "", hr: "", temp: "", spo2: "", glucose: "" });
+    setTriageResult(null);
+    setPatientId(null);
+    setAudioUrl(null);
     goTo("step1");
+  };
+
+  const handleStep1Next = async () => {
+    try {
+      const res = await createPatient({
+        name: patientData.name,
+        age: parseInt(patientData.age) || 0,
+        gender: patientData.gender || "other",
+      });
+      setPatientId(res.patient.id);
+    } catch {
+      console.warn("Patient creation failed, continuing with mock flow");
+    }
+    goTo("step2");
   };
 
   const handleStep3Next = () => setShowConfirm(true);
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     setShowConfirm(false);
     goTo("step4_loading");
-    setTimeout(() => goTo("step4"), 3500);
+
+    try {
+      let vitalsAnomalies: AnomalyItem[] | undefined;
+      const bp = vitals.bp.trim();
+      const hr = parseFloat(vitals.hr);
+      const temp = parseFloat(vitals.temp);
+      const spo2 = parseFloat(vitals.spo2);
+      const glucose = parseFloat(vitals.glucose);
+      if (bp && !isNaN(hr) && !isNaN(temp) && !isNaN(spo2) && !isNaN(glucose)) {
+        const vitalsRes = await analyzeVitals({ bloodPressure: bp, heartRate: hr, temperature: temp, spo2, glucose });
+        vitalsAnomalies = vitalsRes.anomalies;
+      }
+      const triageRes = await analyzeTriage({
+        englishSymptoms: patientData.transcription || "No symptoms provided",
+        patientAge: parseInt(patientData.age) || 0,
+        patientGender: (patientData.gender as "male" | "female" | "other") || "other",
+        vitalsAnomalies,
+      });
+      setTriageResult(mapTriageResponse(triageRes));
+
+      try {
+        const audioRes = await speakReport({ text: triageRes.reasoning, language: lang });
+        setAudioUrl(audioRes.audioUrl);
+      } catch {
+        console.warn("TTS failed, audio will be unavailable");
+      }
+    } catch {
+      console.warn("Triage analysis failed, using fallback");
+    }
+    goTo("step4");
+  };
+
+  const handleRestart = () => {
+    goTo("dashboard");
   };
 
   return (
@@ -56,8 +136,8 @@ export default function App() {
       className="flex flex-col h-screen max-w-md mx-auto bg-background overflow-hidden"
       style={{ fontFamily: "'Inter', 'Noto Sans Bengali', sans-serif" }}
     >
-      {!isOnline && <OfflineBanner lang={lang} />}
-      <AppHeader lang={lang} setLang={setLang} onHome={() => goTo("dashboard")} />
+      {screen !== "login" && !isOnline && <OfflineBanner lang={lang} />}
+      {screen !== "login" && <AppHeader lang={lang} setLang={setLang} onHome={() => goTo("dashboard")} />}
       {currentStep && <StepProgressBar step={currentStep} lang={lang} />}
 
       <main className="flex-1 min-h-0 overflow-hidden flex flex-col">
@@ -70,6 +150,7 @@ export default function App() {
             transition={{ duration: 0.18, ease: "easeOut" }}
             className="flex-1 flex flex-col min-h-0 overflow-hidden"
           >
+            {screen === "login" && <Login lang={lang} onLogin={handleLogin} />}
             {screen === "dashboard" && (
               <div className="flex-1 overflow-y-auto">
                 <Dashboard onStart={handleStartTriage} lang={lang} />
@@ -79,7 +160,7 @@ export default function App() {
               <Step1PatientInfo
                 data={patientData}
                 onChange={(d) => setPatientData((prev) => ({ ...prev, ...d }))}
-                onNext={() => goTo("step2")}
+                onNext={handleStep1Next}
                 onBack={() => goTo("dashboard")}
                 lang={lang}
               />
@@ -101,9 +182,11 @@ export default function App() {
               />
             )}
             {screen === "step4_loading" && <Step4Loading lang={lang} />}
-            {screen === "step4" && (
+            {screen === "step4" && triageResult && (
               <Step4TriageResult
                 patientData={patientData}
+                triageResult={triageResult}
+                audioUrl={audioUrl}
                 onNext={() => goTo("step5")}
                 onBack={() => goTo("step3")}
                 lang={lang}
@@ -113,7 +196,10 @@ export default function App() {
               <Step5Report
                 patientData={patientData}
                 vitals={vitals}
-                onRestart={() => goTo("dashboard")}
+                triageResult={triageResult}
+                patientId={patientId}
+                audioUrl={audioUrl}
+                onRestart={handleRestart}
                 lang={lang}
               />
             )}
@@ -121,9 +207,11 @@ export default function App() {
         </AnimatePresence>
       </main>
 
-      <div className="bg-amber-50 border-t border-amber-200 px-4 py-3 text-xs text-amber-800 font-medium text-center leading-relaxed">
-        {tx("disclaimer", lang)}
-      </div>
+      {screen !== "login" && (
+        <div className="bg-amber-50 border-t border-amber-200 px-4 py-3 text-xs text-amber-800 font-medium text-center leading-relaxed">
+          {tx("disclaimer", lang)}
+        </div>
+      )}
 
       <AnimatePresence>
         {showConfirm && (

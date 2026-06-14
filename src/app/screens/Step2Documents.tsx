@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Camera, Upload, FileText, Loader2, Check, Edit3, Save, SkipForward } from "lucide-react";
 import { Card, CardContent } from "@/app/components/ui/card";
@@ -9,6 +9,7 @@ import { Skeleton } from "@/app/components/ui/skeleton";
 import { Separator } from "@/app/components/ui/separator";
 import type { Lang, ExtractedRow } from "@/app/types";
 import { tx } from "@/app/translations";
+import { extractOcr } from "@/app/api";
 import { MOCK_EXTRACTED } from "@/app/mock-data";
 
 interface Props {
@@ -23,17 +24,45 @@ export function Step2Documents({ onNext, onBack, lang }: Props) {
   const [extracted, setExtracted] = useState(false);
   const [rows, setRows] = useState<ExtractedRow[]>([]);
   const [editIdx, setEditIdx] = useState<number | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
 
-  const handleUpload = useCallback(() => {
+  const handleUpload = useCallback(async (file?: File) => {
     setUploaded(true);
     setExtracting(true);
-    setTimeout(() => {
+    try {
+      if (file) {
+        const res = await extractOcr(file, file.name);
+        const combined: ExtractedRow[] = [];
+        const max = Math.max(res.entities.medications.length, res.entities.dosages.length, res.entities.diagnoses.length);
+        for (let i = 0; i < max; i++) {
+          combined.push({
+            medication: res.entities.medications[i] ?? "",
+            dosage: res.entities.dosages[i] ?? "",
+            diagnosis: res.entities.diagnoses[i] ?? "",
+          });
+        }
+        setRows(combined.length > 0 ? combined : MOCK_EXTRACTED);
+      } else {
+        setRows(MOCK_EXTRACTED);
+      }
+    } catch {
+      setRows(MOCK_EXTRACTED);
+    } finally {
       setExtracting(false);
       setExtracted(true);
-      setRows(MOCK_EXTRACTED);
-    }, 2200);
+    }
   }, []);
+
+  const triggerUpload = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = (e) => {
+      const f = (e.target as HTMLInputElement).files?.[0];
+      if (f) handleUpload(f);
+      else handleUpload();
+    };
+    input.click();
+  }, [handleUpload]);
 
   return (
     <div className="flex flex-col h-full">
@@ -45,7 +74,7 @@ export function Step2Documents({ onNext, onBack, lang }: Props) {
             <div className="grid grid-cols-2 gap-3">
               <Button
                 variant="outline"
-                onClick={handleUpload}
+                onClick={triggerUpload}
                 className="flex flex-col items-center gap-2 h-auto py-5"
               >
                 <div className="size-12 bg-teal-100 rounded-2xl flex items-center justify-center">
@@ -55,7 +84,7 @@ export function Step2Documents({ onNext, onBack, lang }: Props) {
               </Button>
               <Button
                 variant="outline"
-                onClick={handleUpload}
+                onClick={triggerUpload}
                 className="flex flex-col items-center gap-2 h-auto py-5"
               >
                 <div className="size-12 bg-blue-100 rounded-2xl flex items-center justify-center">
@@ -67,14 +96,12 @@ export function Step2Documents({ onNext, onBack, lang }: Props) {
 
             <Button
               variant="outline"
-              onClick={handleUpload}
+              onClick={triggerUpload}
               className="w-full border-dashed border-gray-300 h-auto py-8 flex flex-col items-center gap-3"
             >
               <FileText size={32} className="text-gray-400" />
               <p className="text-sm text-muted-foreground">{tx("dropZone", lang)}</p>
             </Button>
-
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" />
           </>
         ) : (
           <>

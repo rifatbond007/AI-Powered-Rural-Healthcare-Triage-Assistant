@@ -76,6 +76,15 @@ const T = {
   cancel:        { en: "Cancel",                          bn: "বাতিল করুন" },
   stepOf:        { en: "Step",                            bn: "ধাপ" },
   of:            { en: "of 5",                            bn: "এর ৫" },
+  loginTitle:    { en: "CHW Login",                       bn: "সিএইচডব্লিউ লগইন" },
+  email:         { en: "Email",                           bn: "ইমেইল" },
+  emailPh:       { en: "chw@clinic.org",                  bn: "chw@clinic.org" },
+  password:      { en: "Password",                        bn: "পাসওয়ার্ড" },
+  passwordPh:    { en: "Enter your password",             bn: "আপনার পাসওয়ার্ড দিন" },
+  loginBtn:      { en: "Sign In",                         bn: "সাইন ইন" },
+  loginError:    { en: "Invalid email or password",       bn: "ভুল ইমেইল বা পাসওয়ার্ড" },
+  loggingIn:     { en: "Signing in…",                     bn: "সাইন ইন হচ্ছে…" },
+  logout:        { en: "Logout",                          bn: "লগআউট" },
 };
 
 export const tx = (key: keyof typeof T, lang: Lang): string => {

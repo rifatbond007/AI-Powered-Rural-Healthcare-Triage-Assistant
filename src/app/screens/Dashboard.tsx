@@ -1,14 +1,56 @@
+import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { User, MapPin, Plus, ClipboardList, Clock } from "lucide-react";
+import { User, MapPin, Plus, ClipboardList, Clock, LogOut } from "lucide-react";
 import { Card, CardContent } from "@/app/components/ui/card";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
 import type { Lang } from "@/app/types";
 import { tx } from "@/app/translations";
 import { TRIAGE_STYLES } from "@/app/utils";
+import { getPatients } from "@/app/api";
+import type { PatientCase } from "@/app/api";
 import { MOCK_CASES } from "@/app/mock-data";
 
+function mapLevelFromBackend(level: string | null): "critical" | "urgent" | "moderate" | "minor" {
+  if (!level) return "minor";
+  const map: Record<string, "critical" | "urgent" | "moderate" | "minor"> = {
+    RED: "urgent", YELLOW: "moderate", GREEN: "minor", BLACK: "critical",
+  };
+  return map[level] ?? "minor";
+}
+
 export function Dashboard({ onStart, lang }: { onStart: () => void; lang: Lang }) {
+  const [patients, setPatients] = useState<PatientCase[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+
+  useEffect(() => {
+    getPatients()
+      .then((data) => { setPatients(data.patients); setLoaded(true); })
+      .catch(() => { setLoaded(true); });
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    window.location.reload();
+  };
+
+  const displayCases = loaded && patients.length > 0
+    ? patients.map((p) => ({
+        id: p.id,
+        name: p.name,
+        namebn: p.name,
+        age: p.age,
+        gender: p.gender === "male" ? "M" : p.gender === "female" ? "F" : "O",
+        level: mapLevelFromBackend(p.latestTriage?.triageScore ?? null),
+        time: p.createdAt ? new Date(p.createdAt).toLocaleDateString() : "",
+        timebn: p.createdAt ? new Date(p.createdAt).toLocaleDateString() : "",
+        condition: p.latestTriage?.triageScore ?? "Pending",
+        condbn: p.latestTriage?.triageScore ?? "Pending",
+      }))
+    : MOCK_CASES;
+
   return (
     <div className="flex flex-col min-h-0">
       <div className="bg-gradient-to-br from-teal-600 to-teal-700 px-5 pt-6 pb-8">
@@ -16,13 +58,22 @@ export function Dashboard({ onStart, lang }: { onStart: () => void; lang: Lang }
           <div className="size-14 bg-white/20 rounded-2xl flex items-center justify-center">
             <User size={28} className="text-white" />
           </div>
-          <div>
+          <div className="flex-1">
             <p className="text-teal-100 text-sm">{tx("greeting", lang)}</p>
-            <p className="text-white font-bold text-lg leading-tight">{tx("chwName", lang)}</p>
+            <p className="text-white font-bold text-lg leading-tight">
+              {user.name || tx("chwName", lang)}
+            </p>
             <div className="flex items-center gap-1 text-teal-200 text-xs mt-0.5">
-              <MapPin size={11} /> {tx("location", lang)}
+              <MapPin size={11} /> {user.clinicLocation || tx("location", lang)}
             </div>
           </div>
+          <button
+            onClick={handleLogout}
+            className="size-10 bg-white/15 rounded-xl flex items-center justify-center hover:bg-white/25 transition-colors"
+            title="Logout"
+          >
+            <LogOut size={18} className="text-white" />
+          </button>
         </div>
         <Button
           onClick={onStart}
@@ -42,7 +93,7 @@ export function Dashboard({ onStart, lang }: { onStart: () => void; lang: Lang }
           {tx("recentCases", lang)}
         </h2>
         <div className="space-y-3">
-          {MOCK_CASES.map((c, i) => (
+          {displayCases.map((c, i) => (
             <motion.div
               key={c.id}
               initial={{ opacity: 0, y: 12 }}

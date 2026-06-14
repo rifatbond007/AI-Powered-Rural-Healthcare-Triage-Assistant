@@ -1,25 +1,26 @@
 import { useState } from "react";
 import { motion } from "motion/react";
-import { FileText, Stethoscope, CheckCircle, Phone, Check, Play, Pause, Volume2 } from "lucide-react";
+import { FileText, Stethoscope, CheckCircle, Phone, Check } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
-import type { Lang, PatientData } from "@/app/types";
+import type { Lang, PatientData, TriageConfig } from "@/app/types";
 import { tx } from "@/app/translations";
 import { TRIAGE_STYLES } from "@/app/utils";
-import { MOCK_TRIAGE } from "@/app/mock-data";
 import { AudioPlayer } from "@/app/components/shared/AudioPlayer";
 
 interface Props {
   patientData: PatientData;
+  triageResult: TriageConfig;
+  audioUrl: string | null;
   onNext: () => void;
   onBack: () => void;
   lang: Lang;
 }
 
-export function Step4TriageResult({ patientData, onNext, onBack, lang }: Props) {
+export function Step4TriageResult({ patientData, triageResult, audioUrl, onNext, onBack, lang }: Props) {
   const [checked, setChecked] = useState<Set<number>>(new Set());
-  const t = MOCK_TRIAGE;
+  const t = triageResult;
   const cfg = TRIAGE_STYLES[t.level];
 
   const toggleCheck = (i: number) => setChecked((prev) => {
@@ -133,7 +134,7 @@ export function Step4TriageResult({ patientData, onNext, onBack, lang }: Props) 
           </CardContent>
         </Card>
 
-        <AudioPlayer lang={lang} />
+        <AudioPlayer audioUrl={audioUrl} lang={lang} />
       </div>
 
       <div className="flex gap-3 p-4 bg-white border-t border-gray-100">

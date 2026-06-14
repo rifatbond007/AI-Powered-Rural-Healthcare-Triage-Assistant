@@ -1,26 +1,56 @@
 import { useState } from "react";
-import { Download, Send, Check, RefreshCw } from "lucide-react";
+import { Download, Send, Check, RefreshCw, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Separator } from "@/app/components/ui/separator";
-import type { Lang, PatientData, Vitals } from "@/app/types";
+import type { Lang, PatientData, Vitals, TriageConfig } from "@/app/types";
 import { tx } from "@/app/translations";
 import { TRIAGE_STYLES, getVitalStatus, VITAL_DOT } from "@/app/utils";
-import { MOCK_TRIAGE } from "@/app/mock-data";
 import { AudioPlayer } from "@/app/components/shared/AudioPlayer";
+import { generateReport } from "@/app/api";
 
 interface Props {
   patientData: PatientData;
   vitals: Vitals;
+  triageResult: TriageConfig | null;
+  patientId: string | null;
+  audioUrl: string | null;
   onRestart: () => void;
   lang: Lang;
 }
 
-export function Step5Report({ patientData, vitals, onRestart, lang }: Props) {
+export function Step5Report({ patientData, vitals, triageResult, patientId, audioUrl, onRestart, lang }: Props) {
   const [sent, setSent] = useState(false);
-  const cfg = TRIAGE_STYLES[MOCK_TRIAGE.level];
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const fallback = triageResult ?? {
+    level: "moderate" as const,
+    score: 50,
+    reasoning: "No triage data available",
+    reasoningbn: "No triage data available",
+    conditions: [],
+    firstAid: [],
+    referral: { en: "No referral data", bn: "No referral data" },
+  };
+  const cfg = TRIAGE_STYLES[fallback.level];
   const now = new Date();
+
+  const handleDownloadPdf = async () => {
+    setPdfLoading(true);
+    try {
+      if (patientId && triageResult) {
+        const res = await generateReport({ patientId, triageCaseId: "" });
+        if (res.reportUrl) window.open(res.reportUrl, "_blank");
+      }
+    } catch {
+      const blob = new Blob([`Patient Report\n${JSON.stringify(fallback, null, 2)}`], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
 
   const vitalItems = [
     { label: "BP", value: vitals.bp || "—", field: "bp" },
@@ -42,7 +72,7 @@ export function Step5Report({ patientData, vitals, onRestart, lang }: Props) {
               color: cfg.text === "text-white" ? "white" : "#1f2937",
             }}
           >
-            {tx(MOCK_TRIAGE.level, lang)}
+            {tx(fallback.level, lang)}
           </Badge>
         </div>
 
@@ -76,7 +106,7 @@ export function Step5Report({ patientData, vitals, onRestart, lang }: Props) {
 
             <div>
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Assessment</p>
-              <p className="text-sm text-gray-700 leading-relaxed">{MOCK_TRIAGE.reasoning}</p>
+              <p className="text-sm text-gray-700 leading-relaxed">{fallback.reasoning}</p>
             </div>
 
             <Separator />
@@ -84,7 +114,7 @@ export function Step5Report({ patientData, vitals, onRestart, lang }: Props) {
             <div>
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Differential Diagnoses</p>
               <div className="space-y-1">
-                {MOCK_TRIAGE.conditions.map((c, i) => (
+                {fallback.conditions.map((c, i) => (
                   <div key={i} className="flex items-center gap-2 text-sm">
                     <span className="text-gray-400">•</span>
                     <span className="text-gray-700">{c.en}</span>
@@ -107,13 +137,19 @@ export function Step5Report({ patientData, vitals, onRestart, lang }: Props) {
           </CardContent>
         </Card>
 
-        <AudioPlayer lang={lang} />
+        <AudioPlayer audioUrl={audioUrl} lang={lang} />
       </div>
 
       <div className="px-4 pb-4 pt-3 space-y-3 bg-white border-t border-gray-100">
         <div className="grid grid-cols-2 gap-3">
-          <Button variant="default" className="bg-blue-600 hover:bg-blue-500 h-12 text-base font-semibold">
-            <Download size={18} /> {tx("downloadPDF", lang)}
+          <Button
+            variant="default"
+            onClick={handleDownloadPdf}
+            disabled={pdfLoading}
+            className="bg-blue-600 hover:bg-blue-500 h-12 text-base font-semibold"
+          >
+            {pdfLoading ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+            {tx("downloadPDF", lang)}
           </Button>
           <Button
             onClick={() => setSent(true)}
