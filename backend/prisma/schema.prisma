@@ -1,0 +1,57 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TriageLevel {
+  GREEN
+  YELLOW
+  RED
+  BLACK
+}
+
+model User {
+  id             String    @id @default(uuid())
+  name           String
+  email          String    @unique
+  hashedPassword String
+  clinicLocation String
+  createdAt      DateTime  @default(now())
+  patients       Patient[]
+}
+
+model Patient {
+  id          String       @id @default(uuid())
+  name        String
+  age         Int
+  gender      String
+  chwId       String
+  chw         User         @relation(fields: [chwId], references: [id])
+  createdAt   DateTime     @default(now())
+  triageCases TriageCase[]
+}
+
+model TriageCase {
+  id                    String      @id @default(uuid())
+  patientId             String
+  patient               Patient     @relation(fields: [patientId], references: [id])
+  symptomsOriginal      String?
+  symptomsEnglish       String?
+  detectedLanguage      String?
+  medicalHistory        Json?
+  vitals                Json?
+  vitalsAnomalies       Json?
+  triageScore           TriageLevel
+  reasoning             String?
+  differentialDiagnoses Json?
+  firstAidSteps         Json?
+  referralNeeded        Boolean     @default(false)
+  referralUrgency       String?
+  reportUrl             String?
+  audioUrl              String?
+  createdAt             DateTime    @default(now())
+}
